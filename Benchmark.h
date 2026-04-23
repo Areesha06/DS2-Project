@@ -7,6 +7,7 @@
 #include <random>
 #include "Quadtree.h"
 #include "NaiveSearch.h"
+#include "UniformGrid.h"
 
 using namespace std::chrono;
 
@@ -14,6 +15,7 @@ using namespace std::chrono;
 struct BenchmarkResult {
     long long quadtreeTime;   // microseconds
     long long naiveTime;      // microseconds
+    long long gridTime;
     int pointsFound;
     int datasetSize;
     std::string queryLabel;
@@ -43,6 +45,11 @@ public:
         for (const Point& p : allPoints)
             naive.insert(p);
 
+        // --- Build Uniform Grid ---
+        UniformGrid grid(20.0f); // ⚠️ tune this if needed
+        for (const Point& p : allPoints)
+            grid.insert(p);
+
         // --- Benchmark Quadtree Query ---
         std::vector<Point> qtFound;
         auto t1 = high_resolution_clock::now();
@@ -56,9 +63,16 @@ public:
         auto t4 = high_resolution_clock::now();
         long long naiveTime = duration_cast<microseconds>(t4 - t3).count();
 
+        // --- Benchmark Grid Query ---
+        auto t5 = high_resolution_clock::now();
+        std::vector<Point> gridFound = grid.queryRange(queryRange);
+        auto t6 = high_resolution_clock::now();
+        long long gridTime = duration_cast<microseconds>(t6 - t5).count();
+
         BenchmarkResult result;
         result.quadtreeTime = qtTime;
         result.naiveTime = naiveTime;
+        result.gridTime = gridTime;
         result.pointsFound = (int)qtFound.size();
         result.datasetSize = numPoints;
         result.queryLabel = "Range Query (" + std::to_string(numPoints) + " pts)";
@@ -67,17 +81,18 @@ public:
     }
 
     static void printResults(const std::vector<BenchmarkResult>& results) {
-        std::cout << "\n========================================\n";
-        std::cout << "       PERFORMANCE BENCHMARK RESULTS    \n";
-        std::cout << "========================================\n";
+        std::cout << "\n==========================================================================================================\n";
+        std::cout << "                                  PERFORMANCE BENCHMARK RESULTS    \n";
+        std::cout << "==========================================================================================================\n";
         std::cout << std::left
                   << std::setw(20) << "Dataset Size"
                   << std::setw(20) << "Quadtree (us)"
+                  << std::setw(20) << "Grid (us)" 
                   << std::setw(20) << "Naive (us)"
                   << std::setw(15) << "Speedup"
                   << std::setw(12) << "Pts Found"
                   << "\n";
-        std::cout << std::string(87, '-') << "\n";
+        std::cout << std::string(107, '-') << "\n";
 
         for (const auto& r : results) {
             double speedup = (r.quadtreeTime > 0)
@@ -86,11 +101,12 @@ public:
             std::cout << std::left
                       << std::setw(20) << r.datasetSize
                       << std::setw(20) << r.quadtreeTime
+                      << std::setw(20) << r.gridTime  
                       << std::setw(20) << r.naiveTime
                       << std::setw(15) << std::fixed << std::setprecision(2) << speedup
                       << std::setw(12) << r.pointsFound
                       << "\n";
         }
-        std::cout << "========================================\n\n";
+        std::cout << "===========================================================================================================\n\n";
     }
 };
