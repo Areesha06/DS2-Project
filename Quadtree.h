@@ -3,45 +3,45 @@
 #include "Point.h"
 #include "Rectangle.h"
 
-// Maximum number of points a node holds before it subdivides
+// max number of points a node holds before it subdivides
 const int QT_CAPACITY = 4;
 // Maximum recursion depth to prevent infinite subdivision
 const int QT_MAX_DEPTH = 8;
 
 class Quadtree {
 public:
-    Rectangle boundary;
-    std::vector<Point> points;
-    bool divided;
-    int depth;
+    Rectangle boundary; // region covered by this node
+    std::vector<Point> points; // Points stored in this node
+    bool divided; // Whether this node has been subdivided
+    int depth; // Current depth in the tree
 
     // Four child quadrants
-    Quadtree* NE; // North-East
-    Quadtree* NW; // North-West
-    Quadtree* SE; // South-East
-    Quadtree* SW; // South-West
+    Quadtree* NE; // North-East (top right)
+    Quadtree* NW; // North-West (top left)
+    Quadtree* SE; // South-East (bottom right)
+    Quadtree* SW; // South-West (bottom left)
 
-    Quadtree(Rectangle boundary, int depth = 0);
-    ~Quadtree();
+    Quadtree(Rectangle boundary, int depth = 0); // Constructor
+    ~Quadtree(); // destructor
 
-    // Insert a point into the quadtree
+    // insert a point into the quadtree
     bool insert(const Point& p);
 
-    // Range query: find all points within a given rectangle
+    // find all points within a given rectangle
     void queryRange(const Rectangle& range, std::vector<Point>& found) const;
 
-    // Point query: check if an exact point exists
+    // check if an exact point exists
     bool queryPoint(const Point& p) const;
 
-    // Remove all points and collapse subdivisions
+    // remove all points (for reset function)
     void clear();
 
-    // Total number of points in this subtree
+    // total number of points in this subtree
     int count() const;
 
-    // Collect all boundary rectangles (for visualization)
+    // Collect all boundary rectangles
     void getAllBoundaries(std::vector<Rectangle>& rects) const;
 
 private:
-    void subdivide();
+    void subdivide(); // split current node into 4 child quadrants
 };

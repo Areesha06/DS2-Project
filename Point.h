@@ -4,12 +4,12 @@
 // Simple 2D point struct with x, y, id
 struct Point {
     float x, y;
-    int id; // optional identifier 0:schools, 1:hospitals, 2:restaurants, 3: office, 4: hotels, 5: universities
+    int id; // identifier 0:schools, 1:hospitals, 2:restaurants, 3: office, 4: hotels, 5: universities
 
-    Point() : x(0), y(0), id(-1) {}
-    Point(float x, float y, int id = -1) : x(x), y(y), id(id) {}
+    Point() : x(0), y(0), id(-1) {} // default constructor 
+    Point(float x, float y, int id = -1) : x(x), y(y), id(id) {} // initialize with given coordinates and id
 
-    bool operator==(const Point& other) const {
-        return x == other.x && y == other.y;
+    bool operator==(const Point& other) const { //checks if two points have the same coordinates
+        return x == other.x and  y == other.y;
     }
 };

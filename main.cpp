@@ -1,14 +1,15 @@
 /*
- * CS201 - Data Structures II
+ *  - Data Structures II
  * Project: Efficient Spatial Query System using Quadtree
  *
  * Controls:
- *   Left Click       - Insert a point
- *   Right Click+Drag - Draw a query rectangle
+ *   Left Click       - Insert selected location type at cursor
+ *   Right Click+Drag - Draw a range query rectangle
+ *   1-6              - Select location type to insert
  *   R                - Reset / clear all points
- *   G                - Generate random points (500)
- *   B                - Run benchmarks
- *   Q                - Toggle quadtree grid visibility
+ *   G                - Generate 500 random points
+ *   B                - Run benchmarks (console)
+ *   Q                - Toggle quadtree grid
  *   ESC              - Exit
  */
 
@@ -18,229 +19,247 @@
 #include <random>
 #include <string>
 #include <sstream>
+#include <iomanip>
+#include <chrono>
 #include "Quadtree.h"
 #include "NaiveSearch.h"
 #include "Benchmark.h"
 
-// ─────────────────────────────────────────────
-// Window & world settings
-// ─────────────────────────────────────────────
-const int   WIN_W   = 1000;
-const int   WIN_H   = 800;
+const int   WIN_W   = 1100;
+const int   WIN_H   = 820;
 const float WORLD_X = WIN_W / 2.0f;
 const float WORLD_Y = WIN_H / 2.0f;
 const float WORLD_HW = WIN_W / 2.0f;
 const float WORLD_HH = WIN_H / 2.0f;
 
-// ─────────────────────────────────────────────
-// Helper: draw all quadtree grid lines
-// ─────────────────────────────────────────────
-void drawQuadtreeGrid(sf::RenderWindow& window, const Quadtree& qt) {
+// ─── Location types ────────────────────────────────────────────────────────
+// id: 0=School 1=Hospital 2=Restaurant 3=Office 4=Hotel 5=University
+struct LocType { const char* name; sf::Color color; };
+const LocType LOC_TYPES[6] = {
+    {"School",     sf::Color(255, 220,  50)},  // yellow
+    {"Hospital",   sf::Color(255,  80,  80)},  // red
+    {"Restaurant", sf::Color( 80, 200, 120)},  // green
+    {"Office",     sf::Color(100, 160, 255)},  // blue
+    {"Hotel",      sf::Color(200, 100, 255)},  // purple
+    {"University", sf::Color(255, 160,  80)},  // orange
+};
+
+sf::Color getPointColor(int id) {
+    if (id >= 0 && id < 6) return LOC_TYPES[id].color;
+    return sf::Color(200, 200, 200);
+}
+
+// ─── Draw quadtree grid ────────────────────────────────────────────────────
+void drawQuadtreeGrid(sf::RenderWindow& win, const Quadtree& qt) {
     std::vector<Rectangle> rects;
     qt.getAllBoundaries(rects);
-
     for (const Rectangle& r : rects) {
         sf::RectangleShape shape(sf::Vector2f(r.halfW * 2, r.halfH * 2));
         shape.setPosition(r.left(), r.top());
         shape.setFillColor(sf::Color::Transparent);
-        shape.setOutlineColor(sf::Color(80, 120, 80, 180));
+        shape.setOutlineColor(sf::Color(60, 110, 60, 160));
         shape.setOutlineThickness(1.f);
-        window.draw(shape);
+        win.draw(shape);
     }
 }
 
-// ─────────────────────────────────────────────
-// Helper: draw a circle for a point
-// ─────────────────────────────────────────────
-void drawPoint(sf::RenderWindow& window, const Point& p,
-               sf::Color color = sf::Color(100, 200, 255), float radius = 3.f) {
-    sf::CircleShape circle(radius);
-    circle.setOrigin(radius, radius);
-    circle.setPosition(p.x, p.y);
-    circle.setFillColor(color);
-    window.draw(circle);
+// ─── Draw a point ─────────────────────────────────────────────────────────
+void drawPoint(sf::RenderWindow& win, const Point& p, sf::Color col, float r = 4.f) {
+    sf::CircleShape c(r);
+    c.setOrigin(r, r);
+    c.setPosition(p.x, p.y);
+    c.setFillColor(col);
+    win.draw(c);
 }
 
-// ─────────────────────────────────────────────
-// Helper: draw status text
-// ─────────────────────────────────────────────
-void drawUI(sf::RenderWindow& window, sf::Font& font, int totalPts,
-            int found, bool showGrid, long long qtUs, long long naiveUs, int counts[]) {
-    // Semi-transparent panel
-    sf::RectangleShape panel(sf::Vector2f(280, 200));
-    panel.setPosition(10, 10);
-    panel.setFillColor(sf::Color(10, 10, 10, 200));
-    panel.setOutlineColor(sf::Color(60, 60, 60));
-    panel.setOutlineThickness(1.f);
-    window.draw(panel);
-
-    auto makeText = [&](const std::string& s, float x, float y, sf::Color col = sf::Color::White) {
-        sf::Text t;
-        t.setFont(font);
-        t.setString(s);
-        t.setCharacterSize(14);
-        t.setFillColor(col);
-        t.setPosition(x, y);
-        window.draw(t);
+// ─── Draw UI panel ────────────────────────────────────────────────────────
+void drawUI(sf::RenderWindow& win, sf::Font& font,
+            int totalPts, int found, bool showGrid,
+            long long qtUs, long long naiveUs,
+            int selectedType, int catCounts[6])
+{
+    auto txt = [&](const std::string& s, float x, float y,
+                   sf::Color col = sf::Color(200,200,200), int sz = 13) {
+        sf::Text t; t.setFont(font); t.setString(s);
+        t.setCharacterSize(sz); t.setFillColor(col); t.setPosition(x, y);
+        win.draw(t);
+    };
+    auto panel = [&](float x, float y, float w, float h) {
+        sf::RectangleShape r(sf::Vector2f(w, h));
+        r.setPosition(x, y);
+        r.setFillColor(sf::Color(8, 12, 18, 210));
+        r.setOutlineColor(sf::Color(40, 55, 70));
+        r.setOutlineThickness(1.f);
+        win.draw(r);
     };
 
-    makeText("CS201 - Quadtree Demo", 20, 18, sf::Color(80, 200, 120));
-    makeText("Points: " + std::to_string(totalPts), 20, 42);
-    makeText("Found in query: " + std::to_string(found), 20, 62,
-             found > 0 ? sf::Color(255, 220, 80) : sf::Color::White);
-
+    // ── Top-left info panel ─────────────────────────────────────────────────
+    panel(8, 8, 250, 190);
+    txt(" - Quadtree Demo", 18, 16, sf::Color(80, 200, 120), 14);
+    txt("Total points: " + std::to_string(totalPts), 18, 40);
+    txt("In query:     " + std::to_string(found), 18, 60,
+        found > 0 ? sf::Color(255, 220, 80) : sf::Color(200,200,200));
     if (qtUs >= 0) {
-        makeText("Quadtree: " + std::to_string(qtUs) + " us", 20, 86, sf::Color(100, 220, 100));
-        makeText("Naive:    " + std::to_string(naiveUs) + " us", 20, 106, sf::Color(220, 100, 100));
-        double speedup = (qtUs > 0) ? (double)naiveUs / qtUs : 0.0;
+        txt("Quadtree: " + std::to_string(qtUs) + " us", 18, 84, sf::Color(80, 220, 100));
+        txt("Naive:    " + std::to_string(naiveUs) + " us", 18, 104, sf::Color(220, 80, 80));
         std::ostringstream ss;
-        ss << std::fixed << std::setprecision(1) << speedup << "x speedup";
-        makeText(ss.str(), 20, 126, sf::Color(255, 200, 50));
+        double sp = (qtUs > 0) ? (double)naiveUs / qtUs : 0.0;
+        ss << std::fixed << std::setprecision(1) << sp << "x speedup";
+        txt(ss.str(), 18, 124, sf::Color(255, 200, 50));
     }
+    txt(showGrid ? "[Q] Grid: ON" : "[Q] Grid: OFF", 18, 148,
+        showGrid ? sf::Color(80, 200, 120) : sf::Color(120, 120, 120));
 
-    makeText(showGrid ? "[Q] Grid: ON" : "[Q] Grid: OFF", 20, 150,
-             showGrid ? sf::Color(80, 200, 120) : sf::Color(140, 140, 140));
+    // ── Location selector panel (top-right) ────────────────────────────────
+    float sx = WIN_W - 260.f;
+    panel(sx - 8, 8, 268, 210);
+    txt("INSERT MODE  [1-6]", sx, 16, sf::Color(80, 200, 120), 13);
 
-    // Controls help
-    sf::RectangleShape help(sf::Vector2f(280, 120));
-    help.setPosition(10, WIN_H - 135);
-    help.setFillColor(sf::Color(10, 10, 10, 190));
-    help.setOutlineColor(sf::Color(50, 50, 50));
-    help.setOutlineThickness(1.f);
-    window.draw(help);
-
-    makeText("Left Click:   Add point",       20, WIN_H - 128, sf::Color(180, 180, 180));
-    makeText("Right Drag:   Range query",     20, WIN_H - 110, sf::Color(180, 180, 180));
-    makeText("G: Random pts  R: Reset",       20, WIN_H - 92,  sf::Color(180, 180, 180));
-    makeText("B: Benchmark   Q: Grid",        20, WIN_H - 74,  sf::Color(180, 180, 180));
-    makeText("ESC: Exit",                     20, WIN_H - 56,  sf::Color(180, 180, 180));
-
-    std::string labels[] = {"Schools", "Hospitals", "Restaurants", "Offices", "Hotels", "Universities"};
     for (int i = 0; i < 6; i++) {
-        makeText(labels[i] + ": " + std::to_string(counts[i]), 20, 170 + i * 18);
-}
-}
+        float ry = 40.f + i * 28.f;
+        bool sel = (i == selectedType);
 
-// Add this helper function at the top of main.cpp
-sf::Color getPointColor(int id) {
-    switch (id) {
-        case 0: return sf::Color(255, 220, 50);  // Schools    - yellow
-        case 1: return sf::Color(255, 80, 80);   // Hospitals  - red
-        case 2: return sf::Color(80, 200, 120);  // Restaurants- green
-        case 3: return sf::Color(100, 160, 255); // Offices    - blue
-        case 4: return sf::Color(200, 100, 255); // Hotels     - purple
-        case 5: return sf::Color(255, 160, 80);  // Universities- orange
-        default: return sf::Color(255, 255, 255); // white
+        // Highlight selected
+        if (sel) {
+            sf::RectangleShape hi(sf::Vector2f(246, 24));
+            hi.setPosition(sx - 4, ry - 2);
+            hi.setFillColor(sf::Color(LOC_TYPES[i].color.r,
+                                      LOC_TYPES[i].color.g,
+                                      LOC_TYPES[i].color.b, 40));
+            hi.setOutlineColor(LOC_TYPES[i].color);
+            hi.setOutlineThickness(1.f);
+            win.draw(hi);
+        }
+
+        // Color dot
+        sf::CircleShape dot(6.f);
+        dot.setOrigin(6,6);
+        dot.setPosition(sx + 10, ry + 10);
+        dot.setFillColor(LOC_TYPES[i].color);
+        win.draw(dot);
+
+        std::string label = "[" + std::to_string(i+1) + "] " + LOC_TYPES[i].name;
+        if (sel) label += " <";
+        txt(label, sx + 26, ry + 2,
+            sel ? LOC_TYPES[i].color : sf::Color(170, 170, 170), 13);
     }
+
+    // ── Query breakdown (bottom-left) ─────────────────────────────────────
+    if (found > 0) {
+        panel(8, WIN_H - 195, 250, 185);
+        txt("Query results by type:", 18, WIN_H - 190, sf::Color(150, 150, 150), 12);
+        for (int i = 0; i < 6; i++) {
+            if (catCounts[i] == 0) continue;
+            std::string s = LOC_TYPES[i].name + std::string(": ") + std::to_string(catCounts[i]);
+            txt(s, 18, WIN_H - 170 + i * 22, LOC_TYPES[i].color, 13);
+        }
+    }
+
+    // ── Controls (bottom-right) ────────────────────────────────────────────
+    float cx = WIN_W - 268.f;
+    panel(cx - 8, WIN_H - 130, 276, 122);
+    txt("Left Click:  Insert selected type", cx, WIN_H - 124, sf::Color(160,160,160), 12);
+    txt("Right Drag:  Range query",          cx, WIN_H - 104, sf::Color(160,160,160), 12);
+    txt("G: 500 random pts   R: Reset",      cx, WIN_H - 84,  sf::Color(160,160,160), 12);
+    txt("B: Benchmark (console)",            cx, WIN_H - 64,  sf::Color(160,160,160), 12);
+    txt("Q: Toggle grid   ESC: Exit",        cx, WIN_H - 44,  sf::Color(160,160,160), 12);
 }
 
-int counts[6] = {0};
-// ─────────────────────────────────────────────
-// MAIN
-// ─────────────────────────────────────────────
+// ─── MAIN ─────────────────────────────────────────────────────────────────
 int main() {
     sf::RenderWindow window(sf::VideoMode(WIN_W, WIN_H),
-                            "CS201 - Quadtree Spatial Query System",
+                            " - Quadtree Spatial Query System",
                             sf::Style::Titlebar | sf::Style::Close);
     window.setFramerateLimit(60);
 
-    // Load font (fallback to default if not found)
     sf::Font font;
     bool fontLoaded = font.loadFromFile("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
     if (!fontLoaded)
         fontLoaded = font.loadFromFile("C:/Windows/Fonts/arial.ttf");
+    if (!fontLoaded)
+        fontLoaded = font.loadFromFile("Arial.ttf");
 
-    // World boundary for quadtree (centered in window)
     Rectangle worldBounds(WORLD_X, WORLD_Y, WORLD_HW, WORLD_HH);
     Quadtree qt(worldBounds);
     NaiveSearch naive;
 
-    std::vector<Point> allPoints; // keep track for re-drawing
+    std::vector<Point> allPoints;
     std::vector<Point> queryResult;
     Rectangle queryRect(0, 0, 0, 0);
-    bool hasQuery = false;
-    bool showGrid = true;
-    bool dragging = false;
+    bool hasQuery   = false;
+    bool showGrid   = true;
+    bool dragging   = false;
     sf::Vector2f dragStart;
 
-    int pointId = 0;
+    int selectedType = 0;         // currently selected location type (0–5)
+    int catCounts[6] = {0};
     long long lastQtUs    = -1;
     long long lastNaiveUs = -1;
 
     std::mt19937 rng(std::random_device{}());
+    std::uniform_int_distribution<int> catDist(0, 5);
 
     while (window.isOpen()) {
         sf::Event event;
         while (window.pollEvent(event)) {
-            // ── Close ──────────────────────────────
             if (event.type == sf::Event::Closed ||
                (event.type == sf::Event::KeyPressed &&
                 event.key.code == sf::Keyboard::Escape))
                 window.close();
 
-            // ── Key presses ────────────────────────
             if (event.type == sf::Event::KeyPressed) {
-                // Q - toggle grid
-                if (event.key.code == sf::Keyboard::Q)
-                    showGrid = !showGrid;
+                auto k = event.key.code;
 
-                // R - reset
-                if (event.key.code == sf::Keyboard::R) {
-                    qt.clear();
-                    naive.clear();
-                    allPoints.clear();
-                    queryResult.clear();
+                // 1–6: select location type
+                if (k >= sf::Keyboard::Num1 && k <= sf::Keyboard::Num6)
+                    selectedType = k - sf::Keyboard::Num1;
+
+                // Q: toggle grid
+                if (k == sf::Keyboard::Q) showGrid = !showGrid;
+
+                // R: reset
+                if (k == sf::Keyboard::R) {
+                    qt.clear(); naive.clear();
+                    allPoints.clear(); queryResult.clear();
                     hasQuery = false;
                     lastQtUs = lastNaiveUs = -1;
-                    pointId = 0;
+                    std::fill(catCounts, catCounts+6, 0);
                 }
 
-                // G - generate 500 random points
-                if (event.key.code == sf::Keyboard::G) {
+                // G: generate 500 random points
+                if (k == sf::Keyboard::G) {
                     std::uniform_real_distribution<float> dx(20.f, WIN_W - 20.f);
                     std::uniform_real_distribution<float> dy(20.f, WIN_H - 20.f);
-                    std::uniform_int_distribution<int> catDist(0, 5);
-                    // Point p(mx, my, catDist(rng)); // instead of pointId++
                     for (int i = 0; i < 500; i++) {
-                        Point p(dx(rng), dy(rng), catDist(rng)); // instead of pointId++
-                        qt.insert(p);
-                        naive.insert(p);
-                        allPoints.push_back(p);
+                        Point p(dx(rng), dy(rng), catDist(rng));
+                        if (qt.insert(p)) { naive.insert(p); allPoints.push_back(p); }
                     }
                 }
 
-                // B - run benchmarks in console
-                if (event.key.code == sf::Keyboard::B) {
+                // B: benchmark
+                if (k == sf::Keyboard::B) {
                     std::vector<BenchmarkResult> results;
-                    Rectangle qr(WIN_W / 2.f, WIN_H / 2.f, WIN_W / 4.f, WIN_H / 4.f);
-                    for (int n : {500, 1000, 5000, 10000, 50000}) {
+                    Rectangle qr(WORLD_X, WORLD_Y, WIN_W/4.f, WIN_H/4.f);
+                    for (int n : {500, 1000, 5000, 10000, 50000})
                         results.push_back(Benchmark::runRangeQuery(n, worldBounds, qr));
-                    }
                     Benchmark::printResults(results);
                 }
             }
 
-            // ── Left Click - insert point ───────────
+            // Left click: insert selected location type
             if (event.type == sf::Event::MouseButtonPressed &&
                 event.mouseButton.button == sf::Mouse::Left) {
                 float mx = (float)event.mouseButton.x;
                 float my = (float)event.mouseButton.y;
-                std::uniform_int_distribution<int> catDist(0, 5);
-                Point p(mx, my, catDist(rng)); // instead of pointId++
-                // Point p(mx, my, pointId++);
-                if (qt.insert(p)) {
-                    naive.insert(p);
-                    allPoints.push_back(p);
-                }
+                Point p(mx, my, selectedType);
+                if (qt.insert(p)) { naive.insert(p); allPoints.push_back(p); }
             }
 
-            // ── Right Click Drag - range query ──────
+            // Right drag: range query
             if (event.type == sf::Event::MouseButtonPressed &&
                 event.mouseButton.button == sf::Mouse::Right) {
                 dragStart = {(float)event.mouseButton.x, (float)event.mouseButton.y};
-                dragging  = true;
-                hasQuery  = false;
-                queryResult.clear();
+                dragging = true; hasQuery = false; queryResult.clear();
             }
 
             if (event.type == sf::Event::MouseButtonReleased &&
@@ -248,7 +267,6 @@ int main() {
                 dragging = false;
                 float mx = (float)event.mouseButton.x;
                 float my = (float)event.mouseButton.y;
-
                 float cx = (dragStart.x + mx) / 2.f;
                 float cy = (dragStart.y + my) / 2.f;
                 float hw = std::abs(mx - dragStart.x) / 2.f;
@@ -256,81 +274,68 @@ int main() {
 
                 if (hw > 2.f && hh > 2.f) {
                     queryRect = Rectangle(cx, cy, hw, hh);
-                    hasQuery  = true;
-
-                    // Quadtree query timing
+                    hasQuery = true;
                     queryResult.clear();
+
                     auto t1 = std::chrono::high_resolution_clock::now();
                     qt.queryRange(queryRect, queryResult);
-
                     auto t2 = std::chrono::high_resolution_clock::now();
-                    lastQtUs = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+                    lastQtUs = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1).count();
 
-                    // int counts[6] = {0}; //counting locations by categories
-                    std::fill(std::begin(counts), std::end(counts), 0);
-                    for (const Point& p : queryResult) {
-                        if (p.id >= 0 && p.id <= 5)
-                            counts[p.id]++;
-                    }
-                    // Naive query timing
+                    std::fill(catCounts, catCounts+6, 0);
+                    for (const Point& p : queryResult)
+                        if (p.id >= 0 && p.id < 6) catCounts[p.id]++;
+
                     auto t3 = std::chrono::high_resolution_clock::now();
-                    std::vector<Point> nf = naive.queryRange(queryRect);
+                    naive.queryRange(queryRect);
                     auto t4 = std::chrono::high_resolution_clock::now();
-                    lastNaiveUs = std::chrono::duration_cast<std::chrono::microseconds>(t4 - t3).count();
+                    lastNaiveUs = std::chrono::duration_cast<std::chrono::microseconds>(t4-t3).count();
                 }
             }
         }
-        
 
-        // ── RENDER ──────────────────────────────────
-        window.clear(sf::Color(18, 20, 22));
+        // rendering 
+        window.clear(sf::Color(14, 18, 24));
 
-        // Draw grid
-        if (showGrid)
-            drawQuadtreeGrid(window, qt);
+        if (showGrid) drawQuadtreeGrid(window, qt);
 
-        // Draw all points
+        // All points
         for (const Point& p : allPoints)
-            drawPoint(window, p, getPointColor(p.id), 3.f);
-            // drawPoint(window, p, sf::Color(100, 160, 255), 3.f);
+            drawPoint(window, p, getPointColor(p.id), 4.f);
 
-        // Draw query rectangle + highlighted results
+        // Query box
         if (hasQuery) {
-            sf::RectangleShape qbox(sf::Vector2f(queryRect.halfW * 2, queryRect.halfH * 2));
+            sf::RectangleShape qbox(sf::Vector2f(queryRect.halfW*2, queryRect.halfH*2));
             qbox.setPosition(queryRect.left(), queryRect.top());
-            qbox.setFillColor(sf::Color(255, 220, 50, 30));
+            qbox.setFillColor(sf::Color(255, 220, 50, 25));
             qbox.setOutlineColor(sf::Color(255, 220, 50, 200));
             qbox.setOutlineThickness(2.f);
             window.draw(qbox);
-
+            // Highlighted results: slightly bigger dot
             for (const Point& p : queryResult)
-                drawPoint(window, p, getPointColor(p.id), 3.f);
-                // drawPoint(window, p, sf::Color(255, 80, 80), 5.f);
+                drawPoint(window, p, getPointColor(p.id), 6.f);
         }
 
-        // Draw live drag rectangle
+        // Live drag preview
         if (dragging) {
-            sf::Vector2i mousePos = sf::Mouse::getPosition(window);
-            float x = std::min(dragStart.x, (float)mousePos.x);
-            float y = std::min(dragStart.y, (float)mousePos.y);
-            float w = std::abs(mousePos.x - dragStart.x);
-            float h = std::abs(mousePos.y - dragStart.y);
-
-            sf::RectangleShape drag(sf::Vector2f(w, h));
-            drag.setPosition(x, y);
-            drag.setFillColor(sf::Color(255, 220, 50, 20));
-            drag.setOutlineColor(sf::Color(255, 220, 50, 150));
-            drag.setOutlineThickness(1.f);
-            window.draw(drag);
+            sf::Vector2i mp = sf::Mouse::getPosition(window);
+            float rx = std::min(dragStart.x, (float)mp.x);
+            float ry = std::min(dragStart.y, (float)mp.y);
+            float rw = std::abs(mp.x - dragStart.x);
+            float rh = std::abs(mp.y - dragStart.y);
+            sf::RectangleShape dr(sf::Vector2f(rw, rh));
+            dr.setPosition(rx, ry);
+            dr.setFillColor(sf::Color(255, 220, 50, 18));
+            dr.setOutlineColor(sf::Color(255, 220, 50, 130));
+            dr.setOutlineThickness(1.f);
+            window.draw(dr);
         }
 
-        // UI overlay
         if (fontLoaded)
-            drawUI(window, font, (int)allPoints.size(),
-                   (int)queryResult.size(), showGrid, lastQtUs, lastNaiveUs, counts);
+            drawUI(window, font, (int)allPoints.size(), (int)queryResult.size(),
+                   showGrid, lastQtUs, lastNaiveUs, selectedType, catCounts);
 
         window.display();
     }
-
     return 0;
 }
