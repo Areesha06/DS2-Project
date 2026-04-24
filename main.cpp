@@ -65,7 +65,7 @@ void drawPoint(sf::RenderWindow& window, const Point& p,
 // Helper: draw status text
 // ─────────────────────────────────────────────
 void drawUI(sf::RenderWindow& window, sf::Font& font, int totalPts,
-            int found, bool showGrid, long long qtUs, long long naiveUs) {
+            int found, bool showGrid, long long qtUs, long long naiveUs, int counts[]) {
     // Semi-transparent panel
     sf::RectangleShape panel(sf::Vector2f(280, 200));
     panel.setPosition(10, 10);
@@ -114,8 +114,27 @@ void drawUI(sf::RenderWindow& window, sf::Font& font, int totalPts,
     makeText("G: Random pts  R: Reset",       20, WIN_H - 92,  sf::Color(180, 180, 180));
     makeText("B: Benchmark   Q: Grid",        20, WIN_H - 74,  sf::Color(180, 180, 180));
     makeText("ESC: Exit",                     20, WIN_H - 56,  sf::Color(180, 180, 180));
+
+    std::string labels[] = {"Schools", "Hospitals", "Restaurants", "Offices", "Hotels", "Universities"};
+    for (int i = 0; i < 6; i++) {
+        makeText(labels[i] + ": " + std::to_string(counts[i]), 20, 170 + i * 18);
+}
 }
 
+// Add this helper function at the top of main.cpp
+sf::Color getPointColor(int id) {
+    switch (id) {
+        case 0: return sf::Color(255, 220, 50);  // Schools    - yellow
+        case 1: return sf::Color(255, 80, 80);   // Hospitals  - red
+        case 2: return sf::Color(80, 200, 120);  // Restaurants- green
+        case 3: return sf::Color(100, 160, 255); // Offices    - blue
+        case 4: return sf::Color(200, 100, 255); // Hotels     - purple
+        case 5: return sf::Color(255, 160, 80);  // Universities- orange
+        default: return sf::Color(255, 255, 255); // white
+    }
+}
+
+int counts[6] = {0};
 // ─────────────────────────────────────────────
 // MAIN
 // ─────────────────────────────────────────────
@@ -180,8 +199,10 @@ int main() {
                 if (event.key.code == sf::Keyboard::G) {
                     std::uniform_real_distribution<float> dx(20.f, WIN_W - 20.f);
                     std::uniform_real_distribution<float> dy(20.f, WIN_H - 20.f);
+                    std::uniform_int_distribution<int> catDist(0, 5);
+                    // Point p(mx, my, catDist(rng)); // instead of pointId++
                     for (int i = 0; i < 500; i++) {
-                        Point p(dx(rng), dy(rng), pointId++);
+                        Point p(dx(rng), dy(rng), catDist(rng)); // instead of pointId++
                         qt.insert(p);
                         naive.insert(p);
                         allPoints.push_back(p);
@@ -204,7 +225,9 @@ int main() {
                 event.mouseButton.button == sf::Mouse::Left) {
                 float mx = (float)event.mouseButton.x;
                 float my = (float)event.mouseButton.y;
-                Point p(mx, my, pointId++);
+                std::uniform_int_distribution<int> catDist(0, 5);
+                Point p(mx, my, catDist(rng)); // instead of pointId++
+                // Point p(mx, my, pointId++);
                 if (qt.insert(p)) {
                     naive.insert(p);
                     allPoints.push_back(p);
@@ -239,9 +262,16 @@ int main() {
                     queryResult.clear();
                     auto t1 = std::chrono::high_resolution_clock::now();
                     qt.queryRange(queryRect, queryResult);
+
                     auto t2 = std::chrono::high_resolution_clock::now();
                     lastQtUs = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
 
+                    // int counts[6] = {0}; //counting locations by categories
+                    std::fill(std::begin(counts), std::end(counts), 0);
+                    for (const Point& p : queryResult) {
+                        if (p.id >= 0 && p.id <= 5)
+                            counts[p.id]++;
+                    }
                     // Naive query timing
                     auto t3 = std::chrono::high_resolution_clock::now();
                     std::vector<Point> nf = naive.queryRange(queryRect);
@@ -250,6 +280,7 @@ int main() {
                 }
             }
         }
+        
 
         // ── RENDER ──────────────────────────────────
         window.clear(sf::Color(18, 20, 22));
@@ -260,7 +291,8 @@ int main() {
 
         // Draw all points
         for (const Point& p : allPoints)
-            drawPoint(window, p, sf::Color(100, 160, 255), 3.f);
+            drawPoint(window, p, getPointColor(p.id), 3.f);
+            // drawPoint(window, p, sf::Color(100, 160, 255), 3.f);
 
         // Draw query rectangle + highlighted results
         if (hasQuery) {
@@ -272,7 +304,8 @@ int main() {
             window.draw(qbox);
 
             for (const Point& p : queryResult)
-                drawPoint(window, p, sf::Color(255, 80, 80), 5.f);
+                drawPoint(window, p, getPointColor(p.id), 3.f);
+                // drawPoint(window, p, sf::Color(255, 80, 80), 5.f);
         }
 
         // Draw live drag rectangle
@@ -294,7 +327,7 @@ int main() {
         // UI overlay
         if (fontLoaded)
             drawUI(window, font, (int)allPoints.size(),
-                   (int)queryResult.size(), showGrid, lastQtUs, lastNaiveUs);
+                   (int)queryResult.size(), showGrid, lastQtUs, lastNaiveUs, counts);
 
         window.display();
     }

@@ -79,6 +79,7 @@ void Quadtree::queryRange(const Rectangle& range, std::vector<Point>& found) con
         SE->queryRange(range, found);
         SW->queryRange(range, found);
     }
+
 }
 
 bool Quadtree::queryPoint(const Point& p) const {
