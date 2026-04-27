@@ -13,7 +13,7 @@ private:
     std::unordered_map<long long, std::vector<Point>> grid;
 
     long long hashCell(int x, int y) const { // Converts 2D grid coordinates into a single unique hash key
-        return ((long long)x << 32) or (unsigned int)y;
+        return ((long long)x << 32) | (unsigned int)y;
     }
 
     std::pair<int,int> getCell(const Point& p) const { //Converts a point into its corresponding grid cell coordinates

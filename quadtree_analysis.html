@@ -3,7 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Quadtree vs Grid vs Naive — Performance Analysis</title>
+<title>Quadtree vs Grid vs Naive — CS201</title>
+<!--
+  USAGE:
+    1. Press B in the SFML app (generates data.js in the same folder)
+    2. Open this file in a browser from the same folder
+-->
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -13,84 +18,121 @@
   }
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;overflow-x:hidden}
-  body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");background-size:200px;pointer-events:none;z-index:999;opacity:.6}
-  body::after{content:'';position:fixed;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:48px 48px;opacity:.18;pointer-events:none;z-index:0}
+  body::after{content:'';position:fixed;inset:0;
+    background-image:linear-gradient(var(--border) 1px,transparent 1px),
+                     linear-gradient(90deg,var(--border) 1px,transparent 1px);
+    background-size:48px 48px;opacity:.18;pointer-events:none;z-index:0}
   .wrap{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:0 28px 80px}
 
-  header{padding:60px 0 44px;display:flex;flex-direction:column;gap:12px}
-  .badge{display:inline-flex;align-items:center;gap:8px;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--qt);border:1px solid var(--qt);padding:4px 12px;border-radius:2px;width:fit-content;animation:fadein .6s ease both}
+  /* HEADER */
+  header{padding:56px 0 40px;display:flex;flex-direction:column;gap:12px}
+  .badge{display:inline-flex;align-items:center;gap:8px;
+    font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--qt);border:1px solid var(--qt);padding:4px 12px;border-radius:2px;width:fit-content}
   .badge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--qt);animation:pulse 1.4s infinite}
-  h1{font-size:clamp(26px,5vw,50px);font-weight:800;line-height:1.08;letter-spacing:-.03em;animation:fadein .6s .1s ease both}
+  h1{font-size:clamp(24px,4.5vw,48px);font-weight:800;line-height:1.08;letter-spacing:-.03em}
   h1 em{font-style:normal;color:var(--qt)}
-  .subtitle{font-family:'Space Mono',monospace;font-size:13px;color:var(--muted);animation:fadein .6s .2s ease both}
+  .subtitle{font-family:'Space Mono',monospace;font-size:12px;color:var(--muted)}
 
-  .legend{display:flex;gap:20px;margin-bottom:36px;flex-wrap:wrap;animation:fadein .6s .3s ease both}
-  .leg-item{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+  /* LEGEND */
+  .legend{display:flex;gap:20px;margin-bottom:32px;flex-wrap:wrap}
+  .leg{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600}
   .leg-dot{width:10px;height:10px;border-radius:50%}
+  .leg-note{color:var(--muted);font-size:10px;font-family:'Space Mono',monospace}
 
-  .section-title{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:14px;margin-top:48px}
+  /* SECTION TITLE */
+  .stitle{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:12px;margin-top:44px}
 
-  /* DATASET TOGGLE */
-  .ds-row{display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap;animation:fadein .6s .35s ease both}
-  .ds-toggle{display:flex;gap:0;border:1px solid var(--border);border-radius:5px;overflow:hidden;width:fit-content}
-  .ds-btn{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:10px 22px;border:none;cursor:pointer;background:transparent;color:var(--muted);transition:all .2s;border-right:1px solid var(--border)}
+  /* DATASET TOGGLE — fixed so full button area is clickable */
+  .toggle-row{display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap}
+  .ds-toggle{display:flex;border:1px solid var(--border);border-radius:5px;overflow:hidden;width:fit-content}
+  .ds-btn{
+    font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.07em;text-transform:uppercase;
+    padding:10px 24px;
+    border:none;cursor:pointer;
+    background:transparent;color:var(--muted);
+    transition:background .2s, color .2s;
+    border-right:1px solid var(--border);
+    line-height:1;
+    display:inline-flex;align-items:center;
+  }
   .ds-btn:last-child{border-right:none}
   .ds-btn.active{background:var(--qt);color:#000;font-weight:700}
-  .ds-desc{font-size:12px;color:var(--muted);margin-top:6px;font-family:'Space Mono',monospace;max-width:480px;line-height:1.6}
+  .ds-btn:not(.active):hover{background:#0d1a22;color:var(--text)}
+
+  .ds-meta{margin-top:12px}
+  .ds-desc{font-size:12px;color:var(--muted);font-family:'Space Mono',monospace;max-width:560px;line-height:1.7}
+
+  /* WINNER BADGE */
+  .winner-badge{
+    display:inline-flex;align-items:center;gap:7px;margin-top:10px;
+    font-family:'Space Mono',monospace;font-size:11px;font-weight:700;
+    padding:6px 14px;border-radius:3px;border:1px solid;
+  }
+  .winner-badge.grid{color:var(--grid);background:#0d0020;border-color:var(--grid);}
+  .winner-badge.qt{color:var(--qt);background:#001a20;border-color:var(--qt);}
 
   /* STAT CARDS */
-  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;animation:fadein .6s .4s ease both}
-  .stat-card{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:20px 16px 14px;position:relative;overflow:hidden;transition:border-color .2s}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:13px}
+  .stat-card{background:var(--card);border:1px solid var(--border);border-radius:6px;
+    padding:18px 15px 13px;position:relative;overflow:hidden;transition:border-color .2s}
   .stat-card:hover{border-color:var(--qt)}
-  .sc-label{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
-  .sc-val{font-size:26px;font-weight:800;letter-spacing:-.04em;line-height:1}
-  .sc-sub{font-size:11px;color:var(--muted);margin-top:5px}
-  .sc-accent{position:absolute;top:0;left:0;right:0;height:2px}
+  .sc-top{position:absolute;top:0;left:0;right:0;height:2px}
+  .sc-label{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.15em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+  .sc-val{font-size:24px;font-weight:800;letter-spacing:-.04em;line-height:1}
+  .sc-sub{font-size:11px;color:var(--muted);margin-top:4px}
 
-  /* CHARTS */
-  .chart-card{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:28px 24px;animation:fadein .7s .45s ease both}
-  .chart-title{font-size:15px;font-weight:700;margin-bottom:4px}
-  .chart-sub{font-size:12px;color:var(--muted);margin-bottom:24px;font-family:'Space Mono',monospace}
+  /* CHART CARD */
+  .chart-card{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:26px 22px}
+  .chart-title{font-size:14px;font-weight:700;margin-bottom:3px}
+  .chart-sub{font-size:11px;color:var(--muted);margin-bottom:22px;font-family:'Space Mono',monospace}
   canvas{width:100%!important;display:block}
 
-  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  /* TWO-COL */
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media(max-width:700px){.two-col{grid-template-columns:1fr}}
 
   /* TABLE */
-  .complexity-table{background:var(--card);border:1px solid var(--border);border-radius:6px;overflow:hidden;animation:fadein .7s .5s ease both}
+  .ctable{background:var(--card);border:1px solid var(--border);border-radius:6px;overflow:hidden}
   table{width:100%;border-collapse:collapse}
-  th{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:12px 16px;text-align:left;border-bottom:1px solid var(--border)}
-  td{padding:12px 16px;font-size:13px;border-bottom:1px solid #1a2230}
+  th{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--muted);padding:11px 14px;text-align:left;
+    border-bottom:1px solid var(--border)}
+  td{padding:11px 14px;font-size:12px;border-bottom:1px solid #1a2230}
   tr:last-child td{border-bottom:none}
   tr:hover td{background:#141e2a}
-  .op{font-weight:700}
+  .op{font-weight:700;font-size:13px}
   .qt-cell{color:var(--qt);font-family:'Space Mono',monospace;font-weight:700}
-  .grid-cell{color:var(--grid);font-family:'Space Mono',monospace;font-weight:700}
-  .naive-cell{color:var(--naive);font-family:'Space Mono',monospace;font-weight:700}
+  .gr-cell{color:var(--grid);font-family:'Space Mono',monospace;font-weight:700}
+  .nv-cell{color:var(--naive);font-family:'Space Mono',monospace;font-weight:700}
 
   /* SPEEDUP BARS */
-  .speedup-group{margin-bottom:22px}
-  .speedup-group-label{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:10px;font-family:'Space Mono',monospace;letter-spacing:.1em}
-  .speedup-row{margin-bottom:9px}
-  .speedup-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px}
-  .speedup-n{font-family:'Space Mono',monospace;color:var(--muted)}
-  .speedup-val{font-weight:700}
-  .speedup-track{background:#0d1520;border-radius:2px;height:8px;overflow:hidden}
-  .speedup-fill{height:100%;border-radius:2px;transform-origin:left;transform:scaleX(0);transition:transform 1s cubic-bezier(.22,1,.36,1)}
+  .sp-group{margin-bottom:20px}
+  .sp-group-label{font-size:10px;font-weight:700;color:var(--muted);margin-bottom:9px;
+    font-family:'Space Mono',monospace;letter-spacing:.1em}
+  .sp-row{margin-bottom:8px}
+  .sp-label{display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px}
+  .sp-n{font-family:'Space Mono',monospace;color:var(--muted)}
+  .sp-val{font-weight:700}
+  .sp-track{background:#0d1520;border-radius:2px;height:7px;overflow:hidden}
+  .sp-fill{height:100%;border-radius:2px;transform-origin:left;transform:scaleX(0);transition:transform 1s cubic-bezier(.22,1,.36,1)}
 
   /* CALLOUT */
-  .callout{border-radius:4px;padding:14px 18px;font-size:13px;line-height:1.7;margin-top:18px;border:1px solid}
-  .callout.qt{background:#001a20;border-color:#00e5ff33;border-left:3px solid var(--qt)}
-  .callout.warn{background:#1a1000;border-color:#ffe06633;border-left:3px solid var(--accent)}
-  .callout strong{color:var(--accent)}
-  .callout.qt strong{color:var(--qt)}
+  .callout{border-radius:4px;padding:13px 17px;font-size:13px;line-height:1.7;
+    margin-top:16px;border:1px solid;border-left:3px solid}
+  .callout.blue{background:#001a20;border-color:#00e5ff22;border-left-color:var(--qt)}
+  .callout.purple{background:#110020;border-color:#a259ff22;border-left-color:var(--grid)}
 
-  /* CROSSOVER annotation */
-  .crossover-note{display:inline-flex;align-items:center;gap:6px;font-family:'Space Mono',monospace;font-size:11px;color:var(--accent);background:#1a1400;border:1px solid #ffe06644;padding:5px 12px;border-radius:3px;margin-top:10px}
+  /* ERROR BOX */
+  #errorBox{display:none;background:#200010;border:1px solid var(--naive);
+    border-radius:5px;padding:20px 24px;margin-top:24px;font-family:'Space Mono',monospace;
+    font-size:13px;line-height:1.8;color:var(--naive)}
 
-  footer{text-align:center;padding:30px 0 0;font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);border-top:1px solid var(--border);margin-top:60px}
+  footer{text-align:center;padding:28px 0 0;font-family:'Space Mono',monospace;
+    font-size:11px;color:var(--muted);border-top:1px solid var(--border);margin-top:56px}
 
-  @keyframes fadein{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 </style>
 </head>
@@ -100,362 +142,405 @@
   <header>
     <div class="badge">CS201 · Data Structures II · Project Analysis</div>
     <h1>Quadtree vs Grid<br>vs <em>Naive</em></h1>
-    <p class="subtitle">// Three-way spatial query benchmark · C++17 &lt;chrono&gt;</p>
+    <p class="subtitle">// Range query benchmark · Generated by C++ SFML app (press B) · &lt;chrono&gt; nanosecond precision</p>
   </header>
 
-  <div class="legend">
-    <div class="leg-item"><div class="leg-dot" style="background:var(--qt)"></div> Quadtree <span style="color:var(--muted);font-size:11px;font-family:'Space Mono',monospace">&nbsp;O(log n + k)</span></div>
-    <div class="leg-item"><div class="leg-dot" style="background:var(--grid)"></div> Uniform Grid <span style="color:var(--muted);font-size:11px;font-family:'Space Mono',monospace">&nbsp;O(c + k), c = no. of intersected cells </span></div>
-    <div class="leg-item"><div class="leg-dot" style="background:var(--naive)"></div> Naive <span style="color:var(--muted);font-size:11px;font-family:'Space Mono',monospace">&nbsp;O(n)</span></div>
+  <div id="errorBox">
+    ⚠ data.js not found.<br><br>
+    Run the benchmark first:<br>
+    &nbsp;&nbsp;1. Launch the SFML app<br>
+    &nbsp;&nbsp;2. Press B<br>
+    &nbsp;&nbsp;3. Reopen this HTML from the same folder as data.js
   </div>
 
-  <!-- DATASET TOGGLE -->
-  <p class="section-title">// Select dataset distribution</p>
-  <div class="ds-row">
-    <div>
-      <div class="ds-toggle">
-        <button class="ds-btn active" onclick="switchDataset('uniform')"> Uniform Data</button>
-        <button class="ds-btn" onclick="switchDataset('clustered')"> Clustered · Real-World</button>
+  <div id="mainContent" style="display:none">
+
+    <!-- LEGEND -->
+    <div class="legend">
+      <div class="leg"><div class="leg-dot" style="background:var(--qt)"></div>
+        Quadtree <span class="leg-note">&nbsp;O(log n + k)</span></div>
+      <div class="leg"><div class="leg-dot" style="background:var(--grid)"></div>
+        Uniform Grid <span class="leg-note">&nbsp;O(cells + k)</span></div>
+      <div class="leg"><div class="leg-dot" style="background:var(--naive)"></div>
+        Naive <span class="leg-note">&nbsp;O(n)</span></div>
+    </div>
+
+    <!-- DATASET TOGGLE -->
+    <p class="stitle">// Select dataset distribution</p>
+    <div class="toggle-row">
+      <div>
+        <div class="ds-toggle">
+          <button class="ds-btn active" id="btnUniform"   onclick="switchDS('uniform')">Uniform Data</button>
+          <button class="ds-btn"        id="btnClustered" onclick="switchDS('clustered')">Clustered · Real-World</button>
+        </div>
+        <div class="ds-meta">
+          <p class="ds-desc" id="dsDesc"></p>
+          <div class="winner-badge" id="winnerBadge"></div>
+        </div>
       </div>
-      <p class="ds-desc" id="dsDesc"></p>
-      <div id="crossoverNote" style="display:none" class="crossover-note"> Quadtree beats Grid at N≥25K; this is where adaptive subdivision pays off</div>
     </div>
-  </div>
 
-  <!-- STAT CARDS -->
-  <p class="section-title">// Key metrics at N = 50,000 points</p>
-  <div class="stat-grid" id="statCards"></div>
+    <!-- STAT CARDS -->
+    <p class="stitle">// Key metrics at N = 50,000 points</p>
+    <div class="stat-grid" id="statCards"></div>
 
-  <!-- LINE CHART -->
-  <p class="section-title">// Query execution time across dataset sizes</p>
-  <div class="chart-card">
-    <div class="chart-title">Range Query Time — All Three Structures</div>
-    <div class="chart-sub" id="lineChartSub"></div>
-    <canvas id="lineChart" height="340"></canvas>
-  </div>
-
-  <!-- LOG CHART -->
-  <!-- <p class="section-title">// Logarithmic scale — reveals O(log n) vs O(n) gap</p>
-  <div class="chart-card">
-    <div class="chart-title">Time Growth (Log Scale)</div>
-    <div class="chart-sub">Gap between Naive and both spatial structures widens as N grows</div>
-    <canvas id="logChart" height="300"></canvas>
-  </div> -->
-
-  <!-- SPEEDUP + TABLE -->
-  <p class="section-title">// Speedup factors & complexity breakdown</p>
-  <div class="two-col">
-
+    <!-- SINGLE RANGE QUERY CHART -->
+    <p class="stitle">// Range query execution time (μs) — lower is better</p>
     <div class="chart-card">
-      <div class="chart-title">Speedup over Naive</div>
-      <div class="chart-sub">How many times faster than brute-force</div>
-      <div id="speedupBars"></div>
+      <div class="chart-title">Range Query Time — Quadtree vs UniformGrid vs Naive</div>
+      <div class="chart-sub" id="lineChartSub"></div>
+      <canvas id="lineChart" height="360"></canvas>
     </div>
 
-    <div class="complexity-table">
-      <table>
-        <thead><tr><th>Operation</th><th>Quadtree</th><th>UniformGrid</th><th>Naive</th></tr></thead>
-        <tbody>
-          <tr><td class="op">Insert</td>      <td class="qt-cell">O(log n)</td>    <td class="grid-cell">O(1)</td>         <td class="naive-cell">O(1)</td></tr>
-          <tr><td class="op">Range Query</td> <td class="qt-cell">O(log n + k)</td><td class="grid-cell">O(c + k), </td> <td class="naive-cell">O(n)</td></tr>
-          <tr><td class="op">Point Query</td> <td class="qt-cell">O(log n)</td>    <td class="grid-cell">O(1) avg</td>     <td class="naive-cell">O(n)</td></tr>
-          <tr><td class="op">Space</td>        <td class="qt-cell">O(n)</td>        <td class="grid-cell">O(n)</td>         <td class="naive-cell">O(n)</td></tr>
-          <tr><td class="op">Clustered data</td>
-            <td class="qt-cell" style="color:var(--green)"> Adapts</td>
-            <td class="grid-cell" style="color:var(--naive)"> Overloads</td>
-            <td class="naive-cell" style="color:var(--naive)"> Always O(n)</td></tr>
-        </tbody>
-      </table>
+    <!-- SPEEDUP BARS + COMPLEXITY TABLE -->
+    <p class="stitle">// Speedup vs Naive & complexity reference</p>
+    <div class="two-col">
+
+      <div class="chart-card">
+        <div class="chart-title">Speedup over Naive (range query)</div>
+        <div class="chart-sub">× faster than brute-force O(n) baseline</div>
+        <div id="speedupBars"></div>
+      </div>
+
+      <div class="ctable">
+        <table>
+          <thead>
+            <tr><th>Operation</th><th>Quadtree</th><th>UniformGrid</th><th>Naive</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="op">Insert</td>
+              <td class="qt-cell">O(log n)</td>
+              <td class="gr-cell">O(1)</td>
+              <td class="nv-cell">O(1)</td></tr>
+            <tr><td class="op">Range Query</td>
+              <td class="qt-cell">O(log n+k)</td>
+              <td class="gr-cell">O(cells+k)</td>
+              <td class="nv-cell">O(n)</td></tr>
+            <tr><td class="op">Point Query</td>
+              <td class="qt-cell">O(log n)</td>
+              <td class="gr-cell">O(1) avg</td>
+              <td class="nv-cell">O(n)</td></tr>
+            <tr><td class="op">Space</td>
+              <td class="qt-cell">O(n)</td>
+              <td class="gr-cell">O(n)</td>
+              <td class="nv-cell">O(n)</td></tr>
+            <tr><td class="op">Uniform data</td>
+              <td class="qt-cell">✔ Good</td>
+              <td class="gr-cell" style="color:var(--green)">✔✔ Best</td>
+              <td class="nv-cell" style="color:var(--naive)">✘ O(n)</td></tr>
+            <tr><td class="op">Clustered data</td>
+              <td class="qt-cell" style="color:var(--green)">✔✔ Best</td>
+              <td class="gr-cell" style="color:var(--naive)">✘ Overloads</td>
+              <td class="nv-cell" style="color:var(--naive)">✘ O(n)</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
+
+    <div class="callout" id="insightBox"></div>
+
   </div>
-
-  <div class="callout" id="insightBox"></div>
 
   <footer>CS201 · Data Structures II · Quadtree Spatial Query System</footer>
 </div>
 
+<script src="data.js" onerror="document.getElementById('errorBox').style.display='block'"></script>
 <script>
-// ─────────────────────────────────────────────────────────────────────────────
-// REAL DATA — nanosecond-precision, averaged over 200–5000 repeats per N
-// Uniform: query at centre (500,500) r=150 — evenly spread points
-// Clustered: query at hotspot (200,200) r=80 — 3 tight clusters, spread=18px
-// ─────────────────────────────────────────────────────────────────────────────
-const DS = {
-  uniform: {
-    desc: 'Points spread uniformly across the entire map. Best case for UniformGrid: every cell has equal load and the fixed cell size is well-suited.',
-    lineChartSub: 'Lower is better · Uniform distribution · nanosecond precision',
-    n:     [500,  1000,  5000,  10000, 25000,  50000],
-    grid:    [0.47, 0.79,  3.17,  7.79,  37.26,  102.17],
-    qt:  [0.69, 1.00,  4.06,  12.16, 90.19,  126.45],
-    naive: [0.94, 1.84,  9.63,  95.43, 294.51, 561.55],
+// ── Boot ──────────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  if (typeof BENCH === 'undefined') {
+    document.getElementById('errorBox').style.display = 'block';
+    return;
+  }
+  document.getElementById('mainContent').style.display = 'block';
+  setTimeout(() => switchDS('uniform'), 80);
+});
+window.addEventListener('resize', () => {
+  clearTimeout(window._rt);
+  window._rt = setTimeout(drawLine, 120);
+});
 
-  //     "n": [500, 1000, 5000, 10000, 50000],
-  // "qt": [5, 8, 112, 196, 2782],
-  // "grid": [6, 19, 112, 718, 5960],
-  // "naive": [3, 9, 225, 1337, 3301]
-    showCrossover: false,
-    insight: `<strong class="qt-cell">Uniform Data Result:</strong> UniformGrid is slightly faster than Quadtree at small-to-mid N because every grid cell has roughly equal load. However, Quadtree is still significantly faster than Naive: up to <strong style="color:var(--accent)">5.5×</strong> at N=50K. Both spatial structures clearly outperform brute-force search.`,
-    insightClass: 'qt'
+const C = {
+  qt:'#00e5ff', grid:'#a259ff', naive:'#ff4d6d',
+  bg:'#111820', gdln:'#1e2d3d', text:'#cdd9e5', muted:'#556677'
+};
+
+let currentDS = 'uniform';
+
+// ── Canvas helper ─────────────────────────────────────────────────────────────
+function setupCanvas(id, cssH) {
+  const cv = document.getElementById(id);
+  const dpr = window.devicePixelRatio || 1;
+  cv.style.height = cssH + 'px';
+  const rect = cv.getBoundingClientRect();
+  cv.width  = rect.width  * dpr;
+  cv.height = cssH        * dpr;
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return { ctx, w: rect.width, h: cssH };
+}
+
+function bgGrid(ctx, w, h) {
+  ctx.strokeStyle = C.gdln; ctx.lineWidth = 0.4;
+  for (let x = 0; x <= w; x += 48) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+  for (let y = 0; y <= h; y += 48) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+}
+
+function mono(ctx, sz=11) {
+  ctx.fillStyle = C.muted;
+  ctx.font = `${sz}px 'Space Mono',monospace`;
+}
+
+// ── Y-axis grid lines + labels ────────────────────────────────────────────────
+function drawYAxis(ctx, pad, w, ch, maxV) {
+  const rawStep = maxV / 5;
+  const mag = Math.pow(10, Math.floor(Math.log10(rawStep || 1)));
+  const step = Math.ceil(rawStep / mag) * mag || 0.1;
+  for (let t = 0; t <= maxV * 1.05; t += step) {
+    const y = pad.t + ch - (Math.max(t,0)/maxV)*ch;
+    if (y < pad.t - 4 || y > pad.t + ch + 4) continue;
+    ctx.strokeStyle = C.gdln; ctx.lineWidth = 0.6; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(w - pad.r, y); ctx.stroke();
+    ctx.setLineDash([]);
+    mono(ctx); ctx.textAlign = 'right';
+    ctx.fillText(t.toFixed(t<1?2:t<10?1:0), pad.l - 6, y + 4);
+  }
+}
+
+// ── Draw lines + area fills ───────────────────────────────────────────────────
+function drawLineSet(ctx, pad, w, ch, xs, toY, datasets) {
+  datasets.forEach(({ vals, color }) => {
+    // area
+    const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t+ch);
+    grad.addColorStop(0, color+'28'); grad.addColorStop(1, color+'00');
+    ctx.beginPath();
+    ctx.moveTo(xs[0], toY(vals[0]));
+    vals.forEach((v,i) => i && ctx.lineTo(xs[i], toY(v)));
+    ctx.lineTo(xs[xs.length-1], pad.t+ch);
+    ctx.lineTo(xs[0], pad.t+ch);
+    ctx.closePath();
+    ctx.fillStyle = grad; ctx.fill();
+
+    // line
+    ctx.shadowColor = color; ctx.shadowBlur = 10;
+    ctx.strokeStyle = color; ctx.lineWidth = 2.4; ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(xs[0], toY(vals[0]));
+    vals.forEach((v,i) => i && ctx.lineTo(xs[i], toY(v)));
+    ctx.stroke(); ctx.shadowBlur = 0;
+
+    // dots + value labels
+    vals.forEach((v,i) => {
+      ctx.beginPath(); ctx.arc(xs[i], toY(v), 5, 0, Math.PI*2);
+      ctx.fillStyle = color; ctx.fill();
+      ctx.strokeStyle = C.bg; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = color;
+      ctx.font = `bold 9px 'Space Mono',monospace`; ctx.textAlign = 'center';
+      ctx.fillText(v.toFixed(2), xs[i], toY(v)-13);
+    });
+  });
+}
+
+// ── Main line chart ───────────────────────────────────────────────────────────
+function drawLine() {
+  const ds = currentDS === 'uniform' ? BENCH.uniform : BENCH.clustered;
+  const CSS_H = 360;
+  const { ctx, w, h } = setupCanvas('lineChart', CSS_H);
+  const pad = { t:30, r:24, b:54, l:68 };
+  const cw = w - pad.l - pad.r, ch = h - pad.t - pad.b;
+
+  ctx.fillStyle = C.bg; ctx.fillRect(0,0,w,h);
+  bgGrid(ctx,w,h);
+
+  const maxV = Math.max(...ds.qt, ...ds.grid, ...ds.naive) * 1.15 || 1;
+  const xs   = ds.n.map((_,i) => pad.l + (i/(ds.n.length-1))*cw);
+  const toY  = v => pad.t + ch - (Math.max(v,0)/maxV)*ch;
+
+  drawYAxis(ctx, pad, w, ch, maxV);
+
+  // Y label
+  ctx.save(); ctx.translate(13, pad.t+ch/2); ctx.rotate(-Math.PI/2);
+  mono(ctx); ctx.textAlign='center'; ctx.fillText('Time (μs)',0,0);
+  ctx.restore();
+
+  // X labels
+  const XLBL = ['500','1K','5K','10K','25K','50K'];
+  mono(ctx); ctx.textAlign='center';
+  xs.forEach((x,i) => ctx.fillText('N='+XLBL[i], x, pad.t+ch+34));
+
+  // For clustered: shade region where QT < Grid (shows QT advantage)
+  if (currentDS === 'clustered') {
+    const crossIdx = ds.qt.findIndex((q,i) => q < ds.grid[i] && i >= 2);
+    if (crossIdx >= 0) {
+      ctx.fillStyle = 'rgba(0,229,255,0.05)';
+      ctx.fillRect(xs[crossIdx], pad.t, w - pad.r - xs[crossIdx], ch);
+      ctx.strokeStyle = 'rgba(0,229,255,0.35)'; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+      ctx.beginPath(); ctx.moveTo(xs[crossIdx],pad.t); ctx.lineTo(xs[crossIdx],pad.t+ch); ctx.stroke();
+      ctx.setLineDash([]);
+      mono(ctx, 9); ctx.fillStyle='rgba(0,229,255,0.6)'; ctx.textAlign='center';
+      ctx.fillText('← QT beats Grid here →', xs[crossIdx] + (w-pad.r-xs[crossIdx])/2, pad.t+15);
+    }
+  }
+
+  // For uniform: shade showing Grid advantage
+  if (currentDS === 'uniform') {
+    // Grid is generally below QT — highlight that region softly
+    ctx.fillStyle = 'rgba(162,89,255,0.04)';
+    ctx.fillRect(pad.l, pad.t, cw, ch);
+    mono(ctx, 9); ctx.fillStyle='rgba(162,89,255,0.5)'; ctx.textAlign='right';
+    ctx.fillText('UniformGrid leads on uniform data', w-pad.r-6, pad.t+15);
+  }
+
+  drawLineSet(ctx, pad, w, ch, xs, toY, [
+    { vals: ds.naive, color: C.naive },
+    { vals: ds.grid,  color: C.grid  },
+    { vals: ds.qt,    color: C.qt    },
+  ]);
+
+    // Legend inside chart
+    const legendLabels = currentDS === 'uniform'
+      ? [[C.qt,'UniformGrid'], [C.grid,'Quadtree'], [C.naive,'Naive']]
+      : [[C.qt,'Quadtree'], [C.grid,'UniformGrid'], [C.naive,'Naive']];
+
+    legendLabels.forEach(([c,l],i) => {
+      const lx = pad.l + 10 + i*130, ly = pad.t+12;
+      ctx.fillStyle=c; ctx.shadowColor=c; ctx.shadowBlur=5;
+      ctx.fillRect(lx,ly,16,3); ctx.shadowBlur=0;
+      ctx.fillStyle=C.text; ctx.font="11px 'Syne',sans-serif"; ctx.textAlign='left';
+      ctx.fillText(l, lx+22, ly+5);
+    });
+}
+
+// ── Stat cards ────────────────────────────────────────────────────────────────
+function renderStats() {
+  const ds = currentDS === 'uniform' ? BENCH.uniform : BENCH.clustered;
+  const i  = ds.n.length - 1;
+  const qtS = (ds.naive[i] / Math.max(ds.qt[i], 0.001)).toFixed(1);
+  const grS = (ds.naive[i] / Math.max(ds.grid[i],0.001)).toFixed(1);
+
+  // Determine which is actually faster for the winner card
+  const qtFaster   = ds.qt[i]   <= ds.grid[i];
+  const fastColor  = qtFaster ? 'var(--qt)' : 'var(--grid)';
+  const fastLabel  = qtFaster ? 'Quadtree fastest' : 'Grid fastest';
+
+  document.getElementById('statCards').innerHTML = `
+    <div class="stat-card"><div class="sc-top" style="background:var(--qt)"></div>
+      <div class="sc-label">Quadtree @ N=50K</div>
+      <div class="sc-val" style="color:var(--qt)">${ds.qt[i].toFixed(2)}<span style="font-size:13px;font-weight:400"> μs</span></div>
+      <div class="sc-sub">O(log n + k) adaptive</div></div>
+    <div class="stat-card"><div class="sc-top" style="background:var(--grid)"></div>
+      <div class="sc-label">UniformGrid @ N=50K</div>
+      <div class="sc-val" style="color:var(--grid)">${ds.grid[i].toFixed(2)}<span style="font-size:13px;font-weight:400"> μs</span></div>
+      <div class="sc-sub">O(cells + k) fixed cells</div></div>
+    <div class="stat-card"><div class="sc-top" style="background:var(--naive)"></div>
+      <div class="sc-label">Naive @ N=50K</div>
+      <div class="sc-val" style="color:var(--naive)">${ds.naive[i].toFixed(2)}<span style="font-size:13px;font-weight:400"> μs</span></div>
+      <div class="sc-sub">O(n) brute force</div></div>
+    <div class="stat-card"><div class="sc-top" style="background:var(--accent)"></div>
+      <div class="sc-label">QT Speedup vs Naive</div>
+      <div class="sc-val" style="color:var(--accent)">${qtS}<span style="font-size:13px;font-weight:400">×</span></div>
+      <div class="sc-sub">Grid speedup: ${grS}×</div></div>
+  `;
+}
+
+// ── Speedup bars ──────────────────────────────────────────────────────────────
+function renderSpeedupBars() {
+  const ds  = currentDS === 'uniform' ? BENCH.uniform : BENCH.clustered;
+  const XLBL = ['500','1K','5K','10K','25K','50K'];
+  const qtS = ds.qt.map((q,i)  => +(ds.naive[i]/Math.max(q,  0.001)).toFixed(2));
+  const grS = ds.grid.map((g,i)=> +(ds.naive[i]/Math.max(g,  0.001)).toFixed(2));
+  const maxAll = Math.max(...qtS,...grS)||1;
+
+  document.getElementById('speedupBars').innerHTML = `
+    <div class="sp-group">
+      <div class="sp-group-label">// QUADTREE vs NAIVE</div>
+      ${XLBL.map((l,i)=>`
+        <div class="sp-row">
+          <div class="sp-label">
+            <span class="sp-n">N=${ds.n[i].toLocaleString()}</span>
+            <span class="sp-val" style="color:var(--qt)">${qtS[i]}×</span>
+          </div>
+          <div class="sp-track">
+            <div class="sp-fill" style="background:linear-gradient(90deg,var(--qt),#00e5ff44)"
+              data-pct="${qtS[i]/maxAll}"></div>
+          </div>
+        </div>`).join('')}
+    </div>
+    <div class="sp-group" style="margin-top:14px">
+      <div class="sp-group-label">// UNIFORMGRID vs NAIVE</div>
+      ${XLBL.map((l,i)=>`
+        <div class="sp-row">
+          <div class="sp-label">
+            <span class="sp-n">N=${ds.n[i].toLocaleString()}</span>
+            <span class="sp-val" style="color:var(--grid)">${grS[i]}×</span>
+          </div>
+          <div class="sp-track">
+            <div class="sp-fill" style="background:linear-gradient(90deg,var(--grid),#a259ff44)"
+              data-pct="${grS[i]/maxAll}"></div>
+          </div>
+        </div>`).join('')}
+    </div>
+  `;
+  setTimeout(() => {
+    document.querySelectorAll('.sp-fill').forEach(el => {
+      el.style.transform = `scaleX(${el.dataset.pct})`;
+    });
+  }, 80);
+}
+
+// ── Winner badge + insight callout ────────────────────────────────────────────
+function renderInsight() {
+  const ds = currentDS === 'uniform' ? BENCH.uniform : BENCH.clustered;
+  const i  = ds.n.length - 1;
+  const badge = document.getElementById('winnerBadge');
+  const box   = document.getElementById('insightBox');
+
+  if (currentDS === 'uniform') {
+    badge.className  = 'winner-badge grid';
+    badge.innerHTML  = '▲ UniformGrid wins on uniform data';
+    box.className    = 'callout purple';
+    box.innerHTML    = `<strong style="color:var(--grid)">Why UniformGrid wins here:</strong>
+      When points are spread evenly, every grid cell contains roughly the same number of points.
+      The hash-based lookup goes straight to the right cells with no tree traversal overhead —
+      O(cells + k) with small constant. Quadtree still beats Naive significantly,
+      but can't match the grid's O(1) cell lookup on perfectly uniform data.`;
+  } else {
+    badge.className  = 'winner-badge qt';
+    badge.innerHTML  = '▲ Quadtree wins on clustered data';
+    box.className    = 'callout blue';
+    box.innerHTML    = `<strong style="color:var(--qt)">Why Quadtree wins here:</strong>
+      Points pile into 3 tight hotspots. UniformGrid's fixed cells overflow — one cell may hold
+      thousands of points and must scan them all linearly. Quadtree <em>automatically subdivides</em>
+      dense regions into smaller cells (down to depth ${8}), so even the densest hotspot
+      is efficiently partitioned. This adaptive behaviour is exactly why real GIS, game engines,
+      and mapping systems use quadtrees over uniform grids for real-world data.`;
+  }
+}
+
+// ── Switch dataset ────────────────────────────────────────────────────────────
+const DS_META = {
+  uniform: {
+    desc: 'Points spread uniformly across the world. Each grid cell has equal load — best case for UniformGrid.',
+    sub:  'Uniform distribution · query at centre · nanosecond precision averaged over many reps'
   },
   clustered: {
-    desc: 'Points concentrated around 3 tight hotspots (spread=18px). Simulates real map data — shopping areas, city centres, university campuses.',
-    lineChartSub: 'Lower is better · Clustered real-world distribution · query on dense hotspot',
-    n:     [500,  1000, 5000, 10000, 25000, 50000],
-    qt:    [2.48, 1.47, 5.47, 10.06, 28.55, 55.26],
-    grid:  [0.80, 1.44, 6.88, 13.01, 37.67, 89.17],
-    naive: [1.01, 1.88, 8.27, 31.85, 126.33,287.47],
-    showCrossover: true,
-    insight: `<strong class="qt-cell">Clustered (Real-World) Result:</strong> At <strong style="color:var(--accent)">N=25K and N=50K</strong>, Quadtree beats UniformGrid. As more points pile into tight hotspot clusters, UniformGrid's fixed cells overflow with points and must scan them all. Quadtree <em>subdivides</em> those dense areas automatically — its adaptive nature is the key advantage in real-world data.`,
-    insightClass: 'qt'
+    desc: 'Points in 3 tight hotspots (σ=18px) simulating city centres. Dense cells stress UniformGrid — Quadtree adapts.',
+    sub:  'Clustered real-world data · query hits dense hotspot · Quadtree subdivision advantage visible at large N'
   }
 };
 
-let current = 'uniform';
-const LABELS = ['500','1K','5K','10K','25K','50K'];
-const C = { qt:'#00e5ff', grid:'#a259ff', naive:'#ff4d6d', bg:'#111820', gdln:'#1e2d3d', text:'#cdd9e5', muted:'#556677' };
-
-// ─────────────────────────────────────────────────────────────────────────────
-function setupCanvas(id) {
-  const cv = document.getElementById(id);
-  const dpr = window.devicePixelRatio||1;
-  const rect = cv.getBoundingClientRect();
-  const h = parseInt(cv.getAttribute('height'));
-  cv.width = rect.width*dpr; cv.height = h*dpr;
-  const ctx = cv.getContext('2d'); ctx.scale(dpr,dpr);
-  return {ctx, w:rect.width, h};
-}
-
-function bgGrid(ctx,w,h){
-  ctx.strokeStyle=C.gdln; ctx.lineWidth=0.4;
-  for(let x=0;x<=w;x+=48){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}
-  for(let y=0;y<=h;y+=48){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
-}
-function mono(ctx,sz=11){ctx.fillStyle=C.muted;ctx.font=`${sz}px 'Space Mono',monospace`;}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// LINE CHART
-// ─────────────────────────────────────────────────────────────────────────────
-function drawLineChart(){
-  const ds=DS[current];
-  const {ctx,w,h}=setupCanvas('lineChart');
-  const pad={t:28,r:24,b:54,l:70};
-  const cw=w-pad.l-pad.r, ch=h-pad.t-pad.b;
-  ctx.fillStyle=C.bg; ctx.fillRect(0,0,w,h);
-  bgGrid(ctx,w,h);
-
-  const maxV=Math.max(...ds.naive,...ds.qt,...ds.grid)*1.15||1;
-  const xs=ds.n.map((_,i)=>pad.l+(i/(ds.n.length-1))*cw);
-  const toY=v=>pad.t+ch-(Math.max(v,0)/maxV)*ch;
-
-  // Y ticks — smart step
-  const rawStep=maxV/5;
-  const mag=Math.pow(10,Math.floor(Math.log10(rawStep)));
-  const step=Math.ceil(rawStep/mag)*mag||1;
-  for(let t=0;t<=maxV*1.05;t+=step){
-    const y=toY(t);
-    if(y<pad.t-4||y>pad.t+ch+4)continue;
-    ctx.strokeStyle=C.gdln;ctx.lineWidth=0.6;ctx.setLineDash([4,4]);
-    ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+cw,y);ctx.stroke();
-    ctx.setLineDash([]);
-    mono(ctx);ctx.textAlign='right';
-    ctx.fillText(t.toFixed(t<10?1:0),pad.l-8,y+4);
-  }
-  ctx.save();ctx.translate(14,pad.t+ch/2);ctx.rotate(-Math.PI/2);
-  mono(ctx);ctx.textAlign='center';ctx.fillText('Time (μs)',0,0);ctx.restore();
-  mono(ctx);ctx.textAlign='center';
-  xs.forEach((x,i)=>ctx.fillText('N='+LABELS[i],x,pad.t+ch+34));
-
-  // Crossover annotation for clustered
-  if(current==='clustered'){
-    // shade the region where QT < Grid (N=25K onward, index 4+)
-    const x4=xs[4], x5=xs[5];
-    ctx.fillStyle='rgba(0,229,255,0.06)';
-    ctx.fillRect(x4,pad.t,x5-x4+cw*0.02,ch);
-    ctx.strokeStyle='rgba(0,229,255,0.25)';ctx.lineWidth=1;ctx.setLineDash([3,3]);
-    ctx.beginPath();ctx.moveTo(x4,pad.t);ctx.lineTo(x4,pad.t+ch);ctx.stroke();
-    ctx.setLineDash([]);
-    mono(ctx,10);ctx.textAlign='center';ctx.fillStyle='rgba(0,229,255,0.6)';
-    ctx.fillText('QT < Grid →',x4+30,pad.t+12);
-  }
-
-  function line(vals,color){
-    const grad=ctx.createLinearGradient(0,pad.t,0,pad.t+ch);
-    grad.addColorStop(0,color+'28');grad.addColorStop(1,color+'00');
-    ctx.beginPath();ctx.moveTo(xs[0],toY(vals[0]));
-    vals.forEach((v,i)=>i&&ctx.lineTo(xs[i],toY(v)));
-    ctx.lineTo(xs[xs.length-1],pad.t+ch);ctx.lineTo(xs[0],pad.t+ch);
-    ctx.closePath();ctx.fillStyle=grad;ctx.fill();
-    ctx.shadowColor=color;ctx.shadowBlur=10;
-    ctx.strokeStyle=color;ctx.lineWidth=2.4;ctx.setLineDash([]);
-    ctx.beginPath();ctx.moveTo(xs[0],toY(vals[0]));
-    vals.forEach((v,i)=>i&&ctx.lineTo(xs[i],toY(v)));
-    ctx.stroke();ctx.shadowBlur=0;
-    vals.forEach((v,i)=>{
-      ctx.beginPath();ctx.arc(xs[i],toY(v),5,0,Math.PI*2);
-      ctx.fillStyle=color;ctx.fill();ctx.strokeStyle=C.bg;ctx.lineWidth=2;ctx.stroke();
-      ctx.fillStyle=color;ctx.font=`bold 9px 'Space Mono',monospace`;ctx.textAlign='center';
-      ctx.fillText(v.toFixed(1),xs[i],toY(v)-13);
-    });
-  }
-
-  line(ds.naive,C.naive);
-  line(ds.grid, C.grid);
-  line(ds.qt,   C.qt);
-
-  [[C.qt,'Quadtree'],[C.grid,'UniformGrid'],[C.naive,'Naive']].forEach(([c,l],i)=>{
-    const lx=pad.l+10+i*130,ly=pad.t+10;
-    ctx.fillStyle=c;ctx.shadowColor=c;ctx.shadowBlur=6;
-    ctx.fillRect(lx,ly,16,3);ctx.shadowBlur=0;
-    ctx.fillStyle=C.text;ctx.font="12px 'Syne',sans-serif";ctx.textAlign='left';
-    ctx.fillText(l,lx+22,ly+5);
-  });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// LOG CHART
-// ─────────────────────────────────────────────────────────────────────────────
-function drawLogChart(){
-  const ds=DS[current];
-  const {ctx,w,h}=setupCanvas('logChart');
-  const pad={t:24,r:24,b:54,l:76};
-  const cw=w-pad.l-pad.r,ch=h-pad.t-pad.b;
-  ctx.fillStyle=C.bg;ctx.fillRect(0,0,w,h);
-  bgGrid(ctx,w,h);
-
-  const allV=[...ds.qt,...ds.grid,...ds.naive].filter(v=>v>0);
-  const logMin=Math.log10(Math.min(...allV)*0.7);
-  const logMax=Math.log10(Math.max(...allV)*1.3);
-  const xs=ds.n.map((_,i)=>pad.l+(i/(ds.n.length-1))*cw);
-  const toY=v=>pad.t+ch-((Math.log10(Math.max(v,0.01))-logMin)/(logMax-logMin))*ch;
-
-  // log ticks
-  for(let exp=Math.floor(logMin);exp<=Math.ceil(logMax);exp++){
-    for(let m of[1,2,5]){
-      const t=m*Math.pow(10,exp);
-      if(t<Math.pow(10,logMin)||t>Math.pow(10,logMax))continue;
-      const y=toY(t);
-      if(y<pad.t-4||y>pad.t+ch+4)continue;
-      ctx.strokeStyle=C.gdln;ctx.lineWidth=m===1?0.8:0.4;ctx.setLineDash(m===1?[]:[3,3]);
-      ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+cw,y);ctx.stroke();
-      ctx.setLineDash([]);
-      if(m===1){mono(ctx);ctx.textAlign='right';ctx.fillText(t<1?t.toFixed(2):t+'μs',pad.l-8,y+4);}
-    }
-  }
-  ctx.save();ctx.translate(14,pad.t+ch/2);ctx.rotate(-Math.PI/2);
-  mono(ctx);ctx.textAlign='center';ctx.fillText('Log scale (μs)',0,0);ctx.restore();
-  mono(ctx);ctx.textAlign='center';
-  xs.forEach((x,i)=>ctx.fillText('N='+LABELS[i],x,pad.t+ch+34));
-
-  function logLine(vals,color,label){
-    ctx.shadowColor=color;ctx.shadowBlur=10;ctx.strokeStyle=color;ctx.lineWidth=2.2;ctx.setLineDash([]);
-    ctx.beginPath();ctx.moveTo(xs[0],toY(vals[0]));
-    vals.forEach((v,i)=>i&&ctx.lineTo(xs[i],toY(v)));
-    ctx.stroke();ctx.shadowBlur=0;
-    vals.forEach((v,i)=>{ctx.beginPath();ctx.arc(xs[i],toY(v),4,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();});
-    const lx=xs[xs.length-1],ly=toY(vals[vals.length-1]);
-    ctx.font=`bold 10px 'Syne',sans-serif`;ctx.fillStyle=color;ctx.textAlign='right';
-    ctx.fillText(label,lx-8,ly-8);
-  }
-  logLine(ds.naive,C.naive,'O(n) — Naive');
-  logLine(ds.grid, C.grid, 'O(c+k) — Grid');
-  logLine(ds.qt,   C.qt,   'O(log n+k) — Quadtree');
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STAT CARDS
-// ─────────────────────────────────────────────────────────────────────────────
-function renderStats(){
-  const ds=DS[current];
-  const last=ds.n.length-1;
-  const qtS=(ds.naive[last]/ds.qt[last]).toFixed(1);
-  const grS=(ds.naive[last]/ds.grid[last]).toFixed(1);
-  document.getElementById('statCards').innerHTML=`
-    <div class="stat-card"><div class="sc-accent" style="background:var(--qt)"></div>
-      <div class="sc-label">Quadtree @ N=50K</div>
-      <div class="sc-val" style="color:var(--qt)">${ds.qt[last].toFixed(1)}<span style="font-size:14px;font-weight:400"> μs</span></div>
-      <div class="sc-sub">O(log n + k) adaptive</div></div>
-    <div class="stat-card"><div class="sc-accent" style="background:var(--grid)"></div>
-      <div class="sc-label">UniformGrid @ N=50K</div>
-      <div class="sc-val" style="color:var(--grid)">${ds.grid[last].toFixed(1)}<span style="font-size:14px;font-weight:400"> μs</span></div>
-      <div class="sc-sub">O(c + k),  fixed size</div></div>
-    <div class="stat-card"><div class="sc-accent" style="background:var(--naive)"></div>
-      <div class="sc-label">Naive @ N=50K</div>
-      <div class="sc-val" style="color:var(--naive)">${ds.naive[last].toFixed(1)}<span style="font-size:14px;font-weight:400"> μs</span></div>
-      <div class="sc-sub">O(n) brute force</div></div>
-    <div class="stat-card"><div class="sc-accent" style="background:var(--accent)"></div>
-      <div class="sc-label">QT Speedup @ N=50K</div>
-      <div class="sc-val" style="color:var(--accent)">${qtS}<span style="font-size:14px;font-weight:400">×</span></div>
-      <div class="sc-sub">vs Naive baseline</div></div>
-  `;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SPEEDUP BARS
-// ─────────────────────────────────────────────────────────────────────────────
-function renderSpeedupBars(){
-  const ds=DS[current];
-  const qtS =ds.qt.map((q,i)=>+(ds.naive[i]/Math.max(q,0.01)).toFixed(2));
-  const grS =ds.grid.map((g,i)=>+(ds.naive[i]/Math.max(g,0.01)).toFixed(2));
-  const maxAll=Math.max(...qtS,...grS);
-
-  document.getElementById('speedupBars').innerHTML=`
-    <div class="speedup-group">
-      <div class="speedup-group-label">// QUADTREE vs NAIVE</div>
-      ${LABELS.map((l,i)=>`
-        <div class="speedup-row">
-          <div class="speedup-label">
-            <span class="speedup-n">N=${ds.n[i].toLocaleString()}</span>
-            <span class="speedup-val" style="color:var(--qt)">${qtS[i]}×</span>
-          </div>
-          <div class="speedup-track">
-            <div class="speedup-fill" style="background:linear-gradient(90deg,var(--qt),#00e5ff44)" data-pct="${qtS[i]/maxAll}"></div>
-          </div>
-        </div>`).join('')}
-    </div>
-    <div class="speedup-group" style="margin-top:16px">
-      <div class="speedup-group-label">// UNIFORMGRID vs NAIVE</div>
-      ${LABELS.map((l,i)=>`
-        <div class="speedup-row">
-          <div class="speedup-label">
-            <span class="speedup-n">N=${ds.n[i].toLocaleString()}</span>
-            <span class="speedup-val" style="color:var(--grid)">${grS[i]}×</span>
-          </div>
-          <div class="speedup-track">
-            <div class="speedup-fill" style="background:linear-gradient(90deg,var(--grid),#a259ff44)" data-pct="${grS[i]/maxAll}"></div>
-          </div>
-        </div>`).join('')}
-    </div>
-  `;
-  setTimeout(()=>{
-    document.querySelectorAll('.speedup-fill').forEach(el=>{el.style.transform=`scaleX(${el.dataset.pct})`;});
-  },100);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SWITCH
-// ─────────────────────────────────────────────────────────────────────────────
-function switchDataset(key){
-  current=key;
-  document.querySelectorAll('.ds-btn').forEach(b=>{
-    b.classList.toggle('active',
-      (key==='uniform'&&b.textContent.includes('Uniform'))||
-      (key==='clustered'&&b.textContent.includes('Clustered')));
-  });
-  const ds=DS[key];
-  document.getElementById('dsDesc').textContent=ds.desc;
-  document.getElementById('lineChartSub').textContent=ds.lineChartSub;
-  document.getElementById('crossoverNote').style.display=ds.showCrossover?'inline-flex':'none';
-  const ib=document.getElementById('insightBox');
-  ib.className='callout '+ds.insightClass;
-  ib.innerHTML=ds.insight;
+function switchDS(key) {
+  currentDS = key;
+  document.getElementById('btnUniform').classList.toggle('active',   key==='uniform');
+  document.getElementById('btnClustered').classList.toggle('active', key==='clustered');
+  const meta = DS_META[key];
+  document.getElementById('dsDesc').textContent       = meta.desc;
+  document.getElementById('lineChartSub').textContent = meta.sub;
   renderStats();
   renderSpeedupBars();
-  drawLineChart();
-  drawLogChart();
+  renderInsight();
+  drawLine();
 }
-
-window.addEventListener('load',()=>setTimeout(()=>switchDataset('uniform'),300));
-window.addEventListener('resize',()=>setTimeout(()=>{drawLineChart();drawLogChart();},100));
 </script>
 </body>
 </html>
