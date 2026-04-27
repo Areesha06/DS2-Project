@@ -1,39 +1,33 @@
-# CS201 - Data Structures II
+# Data Structures II
 ## Efficient Spatial Query System using Quadtree
 
 ---
 
-## Files Overview
 
-| File              | Purpose                                           |
-|-------------------|---------------------------------------------------|
-| `Point.h`         | Basic 2D point struct                             |
-| `Rectangle.h`     | AABB rectangle for boundaries and queries         |
-| `Quadtree.h/cpp`  | Core Quadtree data structure implementation       |
-| `NaiveSearch.h`   | Brute-force O(n) search for comparison            |
-| `Benchmark.h`     | Timing and benchmark utilities                    |
-| `main.cpp`        | SFML interactive visualization app                |
-| `test_console.cpp`| Console-only tests + benchmarks (no SFML needed)  |
-| `Makefile`        | Build file for Linux/Mac                          |
+| File              | Purpose                                                |
+|-------------------|--------------------------------------------------------|
+| `Point.h`         | Basic 2D point structure                               |
+| `Rectangle.h`     | AABB rectangle for boundaries and queries             |
+| `Quadtree.h/cpp`  | Adaptive spatial partitioning structure               |
+| `UniformGrid.h`   | Fixed-cell spatial hashing structure                  |
+| `NaiveSearch.h`   | Brute-force O(n) search for comparison               |
+| `Benchmark.h`     | Performance benchmarking utilities                    |
+| `main.cpp`        | SFML interactive visualization + simulation          |
+| `data.js`         | Auto-generated benchmark data                        |
+| `index.html`      | HTML dashboard for visualization                     |
+| `Makefile`        | Build configuration (Linux/Mac)                      |
 
 ---
 
 ## Setup & Compilation
 
-### Option A — Console Only (Easier, no SFML needed)
-```bash
-g++ -std=c++17 -O2 -o test test_console.cpp Quadtree.cpp
-./test
-```
-
-### Option B — Full SFML Visualization
-
-**Linux (Ubuntu/Debian):**
+### Linux (Ubuntu/Debian)
 ```bash
 sudo apt install libsfml-dev
 make
 ./quadtree_demo
-```
+
+---
 
 **Windows (MinGW):**
 1. Download SFML from https://sfml-dev.org (MinGW version)
@@ -55,8 +49,10 @@ g++ -std=c++17 -O2 -o quadtree_demo main.cpp Quadtree.cpp -I<sfml>/include -L<sf
 | Left Click           | Insert a point at cursor            |
 | Right Click + Drag   | Draw a range query rectangle        |
 | G                    | Generate 500 random points          |
-| B                    | Run benchmarks (output in console)  |
+| B                    | Run benchmarks and export data.js   |
 | Q                    | Toggle quadtree grid visibility     |
+| C                    | Generate clustered points           |
+| K	                   | Benchmark current screen points     |
 | R                    | Reset / clear everything            |
 | ESC                  | Exit                                |
 
@@ -93,12 +89,31 @@ You can experiment with these values and observe the effect on the grid.
 
 ## Sample Benchmark Output
 ```
-Dataset Size    Quadtree (us)   Naive (us)    Speedup    Pts Found
------------------------------------------------------------------------
-500             12              45            3.75x      47
-1000            18              90            5.00x      96
-5000            25              430           17.20x     489
-10000           30              850           28.33x     978
-50000           38              4200          110.53x    4890
+
+=========================================================================================================
+  RANGE QUERY BENCHMARK — UNIFORM DATA
+=========================================================================================================
+Dataset (N)       Quadtree (us)     UniformGrid (us)  Naive (us)        QT Speedup        Grid Speedup      Pts Found
+---------------------------------------------------------------------------------------------------------
+500               1.36              9.94              5.21              3.84              0.52              43
+1000              5.74              4.92              6.77              1.18              1.38              104
+5000              11.88             21.92             55.44             4.67              2.53              470
+10000             93.66             54.39             174.58            1.86              3.21              921
+25000             103.52            308.01            304.35            2.94              0.99              2300
+50000             422.40            672.77            812.75            1.92              1.21              4592
+=========================================================================================================
+
+=========================================================================================================
+  RANGE QUERY BENCHMARK — CLUSTERED DATA
+=========================================================================================================
+Dataset (N)       Quadtree (us)     UniformGrid (us)  Naive (us)        QT Speedup        Grid Speedup      Pts Found
+---------------------------------------------------------------------------------------------------------
+500               2.04              2.30              2.34              1.15              1.02              158
+1000              4.34              4.65              5.78              1.33              1.24              313
+5000              16.96             19.34             33.72             1.99              1.74              1640
+10000             41.42             43.20             74.41             1.80              1.72              3275
+25000             123.97            159.03            230.87            1.86              1.45              8307
+50000             194.50            293.22            439.03            2.26              1.50              16546
+=========================================================================================================
 ```
 The speedup grows as dataset size increases — demonstrating the O(log n) vs O(n) difference.
