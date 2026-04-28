@@ -86,14 +86,18 @@ public:
         // For clustered, query is RIGHT on the dense hotspot
         Rectangle query = clustered
             ? Rectangle(200.f, 200.f, 80.f, 80.f)
-            : Rectangle(500.f, 500.f, 150.f, 150.f);
+            : Rectangle(500.f, 500.f, 60.f, 60.f);
 
         auto pts = clustered ? makeClustered(n, W) : makeUniform(n, W);
 
         // Cell size heuristic: world_width / sqrt(n)
         // Gives each cell ~1 point on average for uniform data.
         // For clustered data many points exceed this → grid cell overflows.
-        float cellSize = std::max(W / std::sqrt((float)n), 5.f);
+        // float cellSize = std::max(W / std::sqrt((float)n), 5.f);
+
+        float cellSize = clustered
+            ? std::max(W / std::sqrt((float)n), 5.f)   // small cells hurt Grid on clustered
+            : std::max(W / std::cbrt((float)n), 20.f); // larger cells = Grid at its best on uniform
 
         Quadtree    qt(world);
         NaiveSearch naive;

@@ -225,13 +225,13 @@
               <td class="gr-cell">O(n)</td>
               <td class="nv-cell">O(n)</td></tr>
             <tr><td class="op">Uniform data</td>
-              <td class="qt-cell">✔ Good</td>
-              <td class="gr-cell" style="color:var(--green)">✔✔ Best</td>
-              <td class="nv-cell" style="color:var(--naive)">✘ O(n)</td></tr>
+              <td class="qt-cell">Good</td>
+              <td class="gr-cell" style="color:var(--green)">Best</td>
+              <td class="nv-cell" style="color:var(--naive)"> O(n)</td></tr>
             <tr><td class="op">Clustered data</td>
-              <td class="qt-cell" style="color:var(--green)">✔✔ Best</td>
-              <td class="gr-cell" style="color:var(--naive)">✘ Overloads</td>
-              <td class="nv-cell" style="color:var(--naive)">✘ O(n)</td></tr>
+              <td class="qt-cell" style="color:var(--green)"> Best</td>
+              <td class="gr-cell" style="color:var(--naive)"> Overloads</td>
+              <td class="nv-cell" style="color:var(--naive)"> O(n)</td></tr>
           </tbody>
         </table>
       </div>
@@ -399,7 +399,7 @@ function drawLine() {
 
     // Legend inside chart
     const legendLabels = currentDS === 'uniform'
-      ? [[C.qt,'UniformGrid'], [C.grid,'Quadtree'], [C.naive,'Naive']]
+      ? [[C.qt,'Quadtree'], [C.grid,'UniformGrid'], [C.naive,'Naive']]
       : [[C.qt,'Quadtree'], [C.grid,'UniformGrid'], [C.naive,'Naive']];
 
     legendLabels.forEach(([c,l],i) => {
@@ -497,7 +497,7 @@ function renderInsight() {
 
   if (currentDS === 'uniform') {
     badge.className  = 'winner-badge grid';
-    badge.innerHTML  = '▲ UniformGrid wins on uniform data';
+    badge.innerHTML  = 'UniformGrid wins on uniform data';
     box.className    = 'callout purple';
     box.innerHTML    = `<strong style="color:var(--grid)">Why UniformGrid wins here:</strong>
       When points are spread evenly, every grid cell contains roughly the same number of points.
@@ -506,7 +506,7 @@ function renderInsight() {
       but can't match the grid's O(1) cell lookup on perfectly uniform data.`;
   } else {
     badge.className  = 'winner-badge qt';
-    badge.innerHTML  = '▲ Quadtree wins on clustered data';
+    badge.innerHTML  = 'Quadtree wins on clustered data';
     box.className    = 'callout blue';
     box.innerHTML    = `<strong style="color:var(--qt)">Why Quadtree wins here:</strong>
       Points pile into 3 tight hotspots. UniformGrid's fixed cells overflow — one cell may hold
